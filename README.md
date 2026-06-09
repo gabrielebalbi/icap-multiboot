@@ -1,51 +1,61 @@
 # icap-multiboot
 
-ICAP2-based firmware switching on the **Digilent CMOD A7-35T** (Artix-7 XC7A35T).
+Cambio firmware in-system tramite la primitiva `ICAPE2` sulla scheda **Digilent CMOD A7-35T** (Artix-7 XC7A35T).
 
-Pressing a button triggers an in-system reconfiguration via the `ICAPE2` primitive, alternating between two firmware images stored in the SPI flash at different addresses. Groundwork for scrubbing-light via multiboot.
+La pressione di un pulsante avvia una riconfigurazione interna, alternando tra due immagini firmware memorizzate nella flash SPI a indirizzi diversi. Base di partenza per uno scrubbing semplificato via multiboot.
 
-## How it works
+## Come funziona
 
-The top-level module `IcapConfigSequencer` implements a small FSM that:
+Il modulo top-level `IcapConfigSequencer` implementa una FSM che:
 
-1. Waits for the `go` button to be pressed.
-2. Writes the configuration sequence to `ICAPE2`:
-   - Sync word (`0xAA995566`)
-   - Set `WBSTAR` (Warm Boot Start Address) to `0x00000000` or `0x001E8480`, alternating on each trigger
-   - Issue `IPROG` command — the FPGA immediately reloads from the selected address
-3. The ICAP clock is derived from the 12 MHz system clock divided by 256 (~46 kHz), well within the ICAPE2 limit.
-4. Byte-level bit-swap is applied to all data written to `ICAPE2`, as required by UG470.
+1. Attende la pressione del pulsante `go`.
+2. Scrive la sequenza di configurazione su `ICAPE2`:
+   - Parola di sincronizzazione (`0xAA995566`)
+   - Imposta `WBSTAR` (Warm Boot Start Address) a `0x00000000` oppure `0x001E8480`, alternando ad ogni pressione
+   - Invia il comando `IPROG` — l'FPGA si ricarica immediatamente dall'indirizzo selezionato
+3. Il clock di ICAP è derivato dal clock di sistema da 12 MHz diviso per 256 (~46 kHz), entro i limiti del primitivo ICAPE2.
+4. Viene applicato il bit-swap per byte su tutti i dati scritti su `ICAPE2`, come richiesto da UG470.
 
-The `first` flag keeps track of which image was last booted, so consecutive button presses toggle between image 0 and image 1.
+Il flag `first` tiene traccia dell'ultima immagine avviata, così le pressioni successive alternano tra immagine 0 e immagine 1.
 
-## Pin mapping (CMOD A7 rev. B)
+## Mappatura pin (CMOD A7 rev. B)
 
-| Signal      | Pin  | Notes                        |
-|-------------|------|------------------------------|
-| `flash_clk` | L17  | 12 MHz onboard oscillator    |
-| `rst`       | A18  | Button 0 (active high, sync) |
-| `go`        | B18  | Button 1 — triggers IPROG   |
-| `icap_out`  | GPIO | 16-bit ICAP readback bus     |
+| Segnale     | Pin  | Note                              |
+|-------------|------|-----------------------------------|
+| `flash_clk` | L17  | Oscillatore onboard da 12 MHz     |
+| `rst`       | A18  | Pulsante 0 (reset sincrono)       |
+| `go`        | B18  | Pulsante 1 — avvia IPROG          |
+| `icap_out`  | GPIO | Bus di readback ICAP a 16 bit     |
 
-## Flash layout
+## Layout della flash
 
-| Address      | Content         |
-|--------------|-----------------|
-| `0x00000000` | Primary bitstream  |
-| `0x001E8480` | Alternate bitstream |
+| Indirizzo    | Contenuto              |
+|--------------|------------------------|
+| `0x00000000` | Bitstream primario     |
+| `0x001E8480` | Bitstream alternativo  |
 
-The file `testMulti_0x0_0x1E8480.mcs` contains both images merged and ready to be programmed via Vivado Hardware Manager.
+Il file `testMulti_0x0_0x1E8480.mcs` contiene entrambe le immagini unite, pronto per la programmazione tramite Vivado Hardware Manager.
 
-## ILA debug core
+## Core ILA
 
-The XDC includes an ILA connected to `icap_in[*]`, `icap_state[3:0]`, `go`, and `rst` for in-system visibility of the FSM while it runs.
+Il file XDC include un core ILA collegato a `icap_in[*]`, `icap_state[3:0]`, `go` e `rst`, per la visibilità in-system della FSM durante l'esecuzione.
 
-## Requirements
+## Build
 
-- Vivado 2020.x or later (project file: `saltando_da_un_fw_allaltro.xpr`)
+Per rigenerare il bitstream da riga di comando (Vivado 2020.2):
+
+```
+vivado -mode batch -source build_bitstream.tcl
+```
+
+Il bitstream viene salvato in `output/icap_multiboot.bit`.
+
+## Requisiti
+
+- Vivado 2020.2 o successivo (file progetto: `saltando_da_un_fw_allaltro.xpr`)
 - Digilent CMOD A7-35T
 
-## References
+## Riferimenti
 
 - Xilinx UG470 — 7 Series FPGAs Configuration User Guide (ICAPE2, WBSTAR, IPROG)
-- Xilinx DS181 — Artix-7 FPGAs Data Sheet (ICAPE2 clock constraints)
+- Xilinx DS181 — Artix-7 FPGAs Data Sheet (vincoli di clock ICAPE2)
